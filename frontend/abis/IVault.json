@@ -1,0 +1,202 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "IVault",
+  "sourceName": "contracts/interfaces/IVault.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "stableIn",
+          "type": "uint256"
+        }
+      ],
+      "name": "buyDFTViaPool",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "dftOut",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "emaLong",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "emaShort",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getDeltaBps",
+      "outputs": [
+        {
+          "internalType": "int256",
+          "name": "",
+          "type": "int256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getPoolPriceDFTInStable18",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "rebalanceOnceByPriceDrift",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "amountDFT",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amountStable",
+          "type": "uint256"
+        }
+      ],
+      "name": "seedLiquidity",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "dftIn",
+          "type": "uint256"
+        }
+      ],
+      "name": "sellDFTViaPool",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "stableOut",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint16",
+          "name": "_triggerBps",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint16",
+          "name": "_slippageBps",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint16",
+          "name": "_kUpPer100bps",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint16",
+          "name": "_kDownPer100bps",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint16",
+          "name": "_maxActionBpsBuy",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint16",
+          "name": "_maxActionBpsSell",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint32",
+          "name": "_minSpacingSec",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint16",
+          "name": "_maxStressRatioBps",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint16",
+          "name": "_maxDailyBudgetBps",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint16",
+          "name": "_targetStableShareBps",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint16",
+          "name": "_allocBandBps",
+          "type": "uint16"
+        }
+      ],
+      "name": "setParams",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_pool",
+          "type": "address"
+        }
+      ],
+      "name": "setPool",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

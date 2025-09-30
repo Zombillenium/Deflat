@@ -1,0 +1,48 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "DummyOracle",
+  "sourceName": "contracts/oracle/DummyOracle.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_price",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "getPrice",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_price",
+          "type": "uint256"
+        }
+      ],
+      "name": "setPrice",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x608034604d57601f61010438819003918201601f19168301916001600160401b03831184841017605257808492602094604052833981010312604d5751600055604051609b90816100698239f35b600080fd5b634e487b7160e01b600052604160045260246000fdfe6080806040526004361015601257600080fd5b60003560e01c806391b7f5ed14604e576398d5fdca14603057600080fd5b3460495760003660031901126049576020906000548152f35b600080fd5b34604957602036600319011260495760043560005500fea2646970667358221220fb5c4241ad43a2b1cc8c42e130b7c4c3fb31b56a0310a0936d2ad987440d8f6a64736f6c634300081c0033",
+  "deployedBytecode": "0x6080806040526004361015601257600080fd5b60003560e01c806391b7f5ed14604e576398d5fdca14603057600080fd5b3460495760003660031901126049576020906000548152f35b600080fd5b34604957602036600319011260495760043560005500fea2646970667358221220fb5c4241ad43a2b1cc8c42e130b7c4c3fb31b56a0310a0936d2ad987440d8f6a64736f6c634300081c0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

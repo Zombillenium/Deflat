@@ -1,0 +1,114 @@
+/* Reset minimal */
+body {
+  margin: 0;
+  font-family: "Inter", Arial, sans-serif;
+  background: #f5f7fa;
+  color: #1a1a1a;
+}
+
+/* Conteneur principal */
+.app-container {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 20px 30px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Titres */
+h1 {
+  font-size: 28px;
+  margin-bottom: 20px;
+  color: #2563eb; /* bleu wagmi vibe */
+}
+
+h2 {
+  margin-top: 25px;
+  margin-bottom: 12px;
+  font-size: 20px;
+  color: #333;
+}
+
+/* Paragraphes */
+p {
+  margin: 6px 0;
+  font-size: 15px;
+}
+
+/* Inputs */
+input[type="number"],
+input[type="text"] {
+  width: 100%;
+  padding: 10px;
+  margin: 8px 0 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 15px;
+  outline: none;
+  transition: border 0.2s ease-in-out;
+}
+
+input[type="number"]:focus,
+input[type="text"]:focus {
+  border: 1px solid #2563eb;
+}
+
+/* Boutons */
+button {
+  padding: 10px 18px;
+  margin-right: 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.2s ease-in-out, transform 0.1s ease-in-out;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+button.approve {
+  background: #fbbf24;
+  color: #000;
+}
+
+button.buy {
+  background: #10b981;
+  color: #fff;
+}
+
+button.sell {
+  background: #ef4444;
+  color: #fff;
+}
+
+button.disconnect {
+  background: #dc2626;
+  color: #fff;
+  margin-top: 10px;
+}
+
+/* Cartes de section (balances, actions, etc.) */
+.section-card {
+  background: #f9fafb;
+  padding: 15px 20px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  border: 1px solid #eee;
+}
+
+/* Adresse wallet */
+.wallet-address {
+  font-family: monospace;
+  background: #f3f4f6;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
