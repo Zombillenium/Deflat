@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useAccount,
   useChainId,
@@ -10,25 +10,16 @@ import {
   useWriteContract,
 } from "wagmi";
 import { ethers } from "ethers";
-
 import "./App.css";
 import { ethereumSepolia } from "./main";
-
 import {
   DFT_ABI,
   STABLE_ABI,
-  VAULT_ABI,
+  POOL_ABI,
   DFT_ADDRESS,
   STABLE_ADDRESS,
-  VAULT_ADDRESS,
+  POOL_ADDRESS,
 } from "./contracts";
-
-import { fmt, nowSec } from "./utils/format";
-
-// Hooks
-import { usePoolData } from "./hooks/usePoolData";
-import { useVaultData } from "./hooks/useVaultData";
-import { useHistory } from "./hooks/useHistory";
 
 // UI Components
 import UserPanel from "./components/UserPanel";
@@ -37,31 +28,65 @@ import { VaultPanel } from "./components/VaultPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { HelpPanel } from "./components/HelpPanel";
 
+// Hooks
+import { usePoolData } from "./hooks/usePoolData";
+import { useVaultData } from "./hooks/useVaultData";
+import { useHistory } from "./hooks/useHistory";
+
 export default function App() {
-  // Wallet / network
+  // ---- Wallet / Wagmi ----
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { connectors, connectAsync } = useConnect();
+  const { connectors, connectAsync, isPending } = useConnect();
   const { disconnect } = useDisconnect();
-  const { switchChain } = useSwitchChain();
+  const { switchChainAsync } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
 
-  // UI
+  // ---- UI ----
   const [dark, setDark] = useState(false);
   const [buyAmount, setBuyAmount] = useState("0");
   const [sellAmount, setSellAmount] = useState("0");
-  console.log("🔗 chainId détecté:", chainId, "isConnected:", isConnected, "address:", address);
+  const [sendTo, setSendTo] = useState("");
+  const [sendAmount, setSendAmount] = useState("");
 
-  // Dark mode
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-  }, [dark]);
-
-  // Data hooks
+  // ---- Data hooks ----
   const pool = usePoolData();
   const vault = useVaultData();
   const history = useHistory();
 
-  // ✅ User balances
+  // ---- Connectors ciblés ----
+  // Rabby arrive via injected() avec EIP-6963 (nom "Rabby Wallet")
+  const rabbyConnector = connectors.find((c) => /rabby/i.test(c.name));
+  // MetaMask arrive via metaMask() (id "metaMask") ou parfois via injected() (nom)
+  const metaMaskConnector =
+    connectors.find((c) => (c as any).id?.startsWith?.("metaMask")) ??
+    connectors.find((c) => /metamask/i.test(c.name));
+
+  const onConnectRabby = async () => {
+    try {
+      if (!rabbyConnector) return alert("Rabby non détecté");
+      await connectAsync({ connector: rabbyConnector, chainId: ethereumSepolia.id });
+    } catch (err: any) {
+      console.warn("❌ Erreur connexion Rabby:", err?.message || err);
+      alert("❌ Impossible de se connecter via Rabby (voir console).");
+    }
+  };
+
+  const onConnectMetaMask = async () => {
+    try {
+      if (!metaMaskConnector) return alert("MetaMask non détecté");
+      await connectAsync({ connector: metaMaskConnector, chainId: ethereumSepolia.id });
+    } catch (err: any) {
+      console.warn("❌ Erreur connexion MetaMask:", err?.message || err);
+      if (err?.code === 4902 || err?.message?.includes?.("Unrecognized chain")) {
+        alert("Veuillez ajouter manuellement le réseau Sepolia dans votre wallet.");
+      } else {
+        alert("❌ Impossible de se connecter via MetaMask (voir console).");
+      }
+    }
+  };
+
+  // ---- Balances utilisateur ----
   const userDFT = useReadContract({
     chainId: ethereumSepolia.id,
     abi: DFT_ABI,
@@ -70,7 +95,6 @@ export default function App() {
     args: [address],
     query: { enabled: !!address },
   });
-
   const userStable = useReadContract({
     chainId: ethereumSepolia.id,
     abi: STABLE_ABI,
@@ -80,125 +104,166 @@ export default function App() {
     query: { enabled: !!address },
   });
 
-  const lastAction = useMemo(
-    () => (history.history || []).find((h) => h.label.startsWith("Vault ")),
-    [history.history]
-  );
+  useEffect(() => {
+    if (!userDFT?.refetch || !userStable?.refetch) return;
+    const refresh = () => {
+      userDFT.refetch();
+      userStable.refetch();
+    };
+    refresh();
+    const id = setInterval(refresh, 10_000);
+    return () => clearInterval(id);
+  }, [userDFT?.refetch, userStable?.refetch]);
 
-  // Derived status
+  // ---- Réseau ----
   const isWrongNetwork = chainId !== ethereumSepolia.id;
-  const isCooldown = Number(vault.nextAllowedAt?.data || 0n) > nowSec();
-
-  const vaultStatus = useMemo(() => {
-    if (isCooldown) return { label: "⏸ Cooldown", color: "#f59e0b" };
-    if (vault.stressRatioBps > vault.stressMax)
-      return { label: "⏸ Skip (Stress)", color: "#ef4444" };
-    if (
-      vault.dailyBudgetAbs > 0 &&
-      vault.spentTodayNum >= vault.dailyBudgetAbs
-    )
-      return { label: "⏸ Budget atteint", color: "#ef4444" };
-    return { label: "✅ Active", color: "#10b981" };
-  }, [
-    isCooldown,
-    vault.stressRatioBps,
-    vault.stressMax,
-    vault.dailyBudgetAbs,
-    vault.spentTodayNum,
-  ]);
-
-  // Writer (un seul hook suffit)
-  const { writeContractAsync } = useWriteContract();
-
-  const onApprove = async () => {
-    if (!buyAmount || Number(buyAmount) <= 0) return;
-    await writeContractAsync({
-      chainId: ethereumSepolia.id,
-      abi: STABLE_ABI,
-      address: STABLE_ADDRESS as `0x${string}`,
-      functionName: "approve",
-      args: [VAULT_ADDRESS, ethers.parseUnits(buyAmount, 18)],
-    });
+  const handleSwitch = async () => {
+    try {
+      await switchChainAsync({ chainId: ethereumSepolia.id });
+    } catch (err) {
+      console.warn("❌ Erreur switch réseau:", err);
+    }
   };
 
+  // ---- Dark mode ----
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+  }, [dark]);
+
+  // ---- Actions AMM ----
   const onBuy = async () => {
     if (!buyAmount || Number(buyAmount) <= 0) return;
-    await writeContractAsync({
-      chainId: ethereumSepolia.id,
-      abi: VAULT_ABI,
-      address: VAULT_ADDRESS as `0x${string}`,
-      functionName: "buyDFT",
-      args: [ethers.parseUnits(buyAmount, 18)],
-    });
+    try {
+      const amountIn = ethers.parseUnits(buyAmount, 18);
+      await writeContractAsync({
+        chainId: ethereumSepolia.id,
+        abi: STABLE_ABI,
+        address: STABLE_ADDRESS as `0x${string}`,
+        functionName: "approve",
+        args: [POOL_ADDRESS, amountIn],
+      });
+      await writeContractAsync({
+        chainId: ethereumSepolia.id,
+        abi: POOL_ABI,
+        address: POOL_ADDRESS as `0x${string}`,
+        functionName: "swapStableForDFT",
+        args: [amountIn, 0n], // attention: pas de slippage check
+      });
+      alert("✅ Achat effectué avec succès !");
+    } catch (err) {
+      console.warn("❌ Erreur BUY:", err);
+      alert("❌ Transaction échouée ou refusée");
+    }
   };
 
   const onSell = async () => {
     if (!sellAmount || Number(sellAmount) <= 0) return;
-    await writeContractAsync({
-      chainId: ethereumSepolia.id,
-      abi: VAULT_ABI,
-      address: VAULT_ADDRESS as `0x${string}`,
-      functionName: "sellDFT",
-      args: [ethers.parseUnits(sellAmount, 18)],
-    });
+    try {
+      const amountIn = ethers.parseUnits(sellAmount, 18);
+      await writeContractAsync({
+        chainId: ethereumSepolia.id,
+        abi: DFT_ABI,
+        address: DFT_ADDRESS as `0x${string}`,
+        functionName: "approve",
+        args: [POOL_ADDRESS, amountIn],
+      });
+      await writeContractAsync({
+        chainId: ethereumSepolia.id,
+        abi: POOL_ABI,
+        address: POOL_ADDRESS as `0x${string}`,
+        functionName: "swapDFTForStable",
+        args: [amountIn, 0n], // attention: pas de slippage check
+      });
+      alert("✅ Vente effectuée avec succès !");
+    } catch (err) {
+      console.warn("❌ Erreur SELL:", err);
+      alert("❌ Transaction échouée ou refusée");
+    }
   };
 
-  // Gates
-  if (isWrongNetwork) {
-    return (
-      <div className={`app-container ${dark ? "dark" : ""}`}>
-        <div className="section-card">
-          <h1>Deflat Dashboard</h1>
-          <p>⚠️ Mauvais réseau (id détecté : {chainId}).</p>
-          <button onClick={() => switchChain({ chainId: ethereumSepolia.id })}>
-            Switch to Sepolia
-          </button>
-          <div style={{ marginTop: 12 }}>
-            <button onClick={() => setDark((d) => !d)}>
-              {dark ? "☀️ Light" : "🌙 Dark"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // ---- Envoi DFT ----
+  const onSend = async () => {
+    if (!sendTo || !sendAmount || Number(sendAmount) <= 0) {
+      alert("Veuillez renseigner une adresse et un montant valide.");
+      return;
+    }
+    try {
+      await writeContractAsync({
+        chainId: ethereumSepolia.id,
+        abi: DFT_ABI,
+        address: DFT_ADDRESS as `0x${string}`,
+        functionName: "transfer",
+        args: [sendTo, ethers.parseUnits(sendAmount, 18)],
+      });
+      alert(`✅ ${sendAmount} DFT envoyés à ${sendTo}`);
+      setSendAmount("");
+      setSendTo("");
+    } catch (err: any) {
+      console.warn("❌ Erreur lors du transfert:", err);
+      alert("❌ Échec de la transaction (voir console).");
+    }
+  };
 
+  // ---- Rendu ----
   if (!isConnected) {
     return (
       <div className={`app-container ${dark ? "dark" : ""}`}>
         <div className="section-card">
           <h1>Deflat Dashboard</h1>
           <p>👉 Connectez votre wallet :</p>
-          {connectors.map((connector) => (
+
+          {/* Rabby */}
+          {rabbyConnector ? (
             <button
-              key={connector.uid}
-              onClick={() => connectAsync({ connector })}
-              style={{ display: "block", marginBottom: 10 }}
+              onClick={onConnectRabby}
+              disabled={isPending}
+              style={{ display: "block", marginBottom: 10, padding: "8px 16px", fontWeight: 500 }}
             >
-              {connector.name}
+              {isPending ? "Connexion..." : "🧱 Rabby Wallet"}
             </button>
-          ))}
+          ) : (
+            <p style={{ color: "#888" }}>Rabby non détecté</p>
+          )}
+
+          {/* MetaMask */}
+          {metaMaskConnector ? (
+            <button
+              onClick={onConnectMetaMask}
+              disabled={isPending}
+              style={{ display: "block", marginBottom: 10, padding: "8px 16px", fontWeight: 500 }}
+            >
+              {isPending ? "Connexion..." : "🦊 MetaMask"}
+            </button>
+          ) : (
+            <p style={{ color: "#888" }}>MetaMask non détecté</p>
+          )}
+
           <div style={{ marginTop: 12 }}>
-            <button onClick={() => setDark((d) => !d)}>
-              {dark ? "☀️ Light" : "🌙 Dark"}
-            </button>
+            <button onClick={() => setDark((d) => !d)}>{dark ? "☀️ Light" : "🌙 Dark"}</button>
           </div>
+
+          <p style={{ fontSize: 12, color: "#888", marginTop: 8 }}>
+            {rabbyConnector && metaMaskConnector
+              ? "✅ Rabby et MetaMask détectés"
+              : rabbyConnector
+              ? "✅ Rabby détecté"
+              : metaMaskConnector
+              ? "✅ MetaMask détecté"
+              : "❌ Aucun wallet détecté"}
+          </p>
         </div>
       </div>
     );
   }
 
-  // Main UI
+  // === UI principale ===
   return (
     <div className={`app-container ${dark ? "dark" : ""}`}>
       <div className="header-row">
         <h1>Deflat Dashboard</h1>
-        <button onClick={() => setDark((d) => !d)}>
-          {dark ? "☀️ Light" : "🌙 Dark"}
-        </button>
+        <button onClick={() => setDark((d) => !d)}>{dark ? "☀️ Light" : "🌙 Dark"}</button>
       </div>
 
-      {/* Wallet row */}
       <div className="section-card">
         <p>
           ✅ Connecté : <span className="wallet-address">{address}</span>
@@ -206,9 +271,13 @@ export default function App() {
         <button className="disconnect" onClick={() => disconnect()}>
           🔌 Déconnexion
         </button>
+        {isWrongNetwork && (
+          <button onClick={handleSwitch} style={{ marginLeft: 12 }}>
+            🔁 Passer sur Sepolia
+          </button>
+        )}
       </div>
 
-      {/* User */}
       <UserPanel
         userDFT={userDFT}
         userStable={userStable}
@@ -216,12 +285,10 @@ export default function App() {
         setBuyAmount={setBuyAmount}
         sellAmount={sellAmount}
         setSellAmount={setSellAmount}
-        onApprove={onApprove}
         onBuy={onBuy}
         onSell={onSell}
       />
 
-      {/* Pool */}
       <PoolPanel
         poolDFT={pool.poolDFT}
         poolStable={pool.poolStable}
@@ -229,7 +296,6 @@ export default function App() {
         poolResSeries={pool.poolResSeries}
       />
 
-      {/* Vault */}
       <VaultPanel
         vaultDFT={vault.vaultDFT}
         vaultStable={vault.vaultStable}
@@ -241,20 +307,16 @@ export default function App() {
         spentTodayNum={vault.spentTodayNum}
         dailyBudgetAbs={vault.dailyBudgetAbs}
         stableSharePct={vault.stableSharePct}
-        vaultStatus={vaultStatus}
-        isCooldown={isCooldown}
-        nextAllowedAt={vault.nextAllowedAt}
-        stressRatioBps={vault.stressRatioBps}
-        stressMax={vault.stressMax}
-        lastAction={lastAction}
+        vaultStatus={{ label: "ℹ️ Lecture seule", color: "#6b7280" }}
+        isCooldown={false}
+        nextAllowedAt={0n}
+        stressRatioBps={0}
+        stressMax={0}
+        lastAction={undefined}
       />
 
-      {/* History */}
       <HistoryPanel history={history.history} />
-
-      {/* Help */}
       <HelpPanel />
     </div>
   );
 }
-

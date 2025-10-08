@@ -1,135 +1,123 @@
-import { useMemo } from "react";
-import { ethers } from "ethers";
+import { useEffect, useState } from "react";
 import { useReadContract } from "wagmi";
-import { formatUnits } from "viem";
-import {
-  DFT_ABI,
-  STABLE_ABI,
-  VAULT_ABI,
-  DFT_ADDRESS,
-  STABLE_ADDRESS,
-  VAULT_ADDRESS,
-  POOL_ABI,
-  POOL_ADDRESS,
-} from "../contracts";
-import { to18, nowSec } from "../utils/format";
+import { VAULT_ABI, VAULT_ADDRESS, DFT_ABI, STABLE_ABI, DFT_ADDRESS, STABLE_ADDRESS } from "../contracts";
+import { ethereumSepolia } from "../main";
 
-export function useVaultData(priceSpot: number) {
+/**
+ * Récupère et met à jour les données du LiquidityVault
+ * - refresh toutes les 10 s
+ * - conserve 1 h d’historique EMA / Spot
+ * - persiste localement
+ */
+export function useVaultData() {
+  const [priceSeries, setPriceSeries] = useState<
+    { ts: number; ema30: number; ema120: number; spot: number }[]
+  >(() => {
+    const saved = localStorage.getItem("vaultPriceSeries");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // === Balances de tokens (DFT et STABLE dans le vault)
   const vaultDFT = useReadContract({
+    chainId: ethereumSepolia.id,
     abi: DFT_ABI,
     address: DFT_ADDRESS as `0x${string}`,
     functionName: "balanceOf",
     args: [VAULT_ADDRESS],
+    query: { enabled: true },
   });
 
   const vaultStable = useReadContract({
+    chainId: ethereumSepolia.id,
     abi: STABLE_ABI,
     address: STABLE_ADDRESS as `0x${string}`,
     functionName: "balanceOf",
     args: [VAULT_ADDRESS],
+    query: { enabled: true },
   });
 
+  // === Variables publiques du vault
   const emaShort = useReadContract({
+    chainId: ethereumSepolia.id,
     abi: VAULT_ABI,
     address: VAULT_ADDRESS as `0x${string}`,
     functionName: "emaShort",
+    query: { enabled: true },
   });
 
   const emaLong = useReadContract({
+    chainId: ethereumSepolia.id,
     abi: VAULT_ABI,
     address: VAULT_ADDRESS as `0x${string}`,
     functionName: "emaLong",
+    query: { enabled: true },
   });
 
-  const spentToday = useReadContract({
+  const spentTodayStableEq = useReadContract({
+    chainId: ethereumSepolia.id,
     abi: VAULT_ABI,
     address: VAULT_ADDRESS as `0x${string}`,
     functionName: "spentTodayStableEq",
+    query: { enabled: true },
   });
 
-  const maxDailyBudgetBps = useReadContract({
-    abi: VAULT_ABI,
-    address: VAULT_ADDRESS as `0x${string}`,
-    functionName: "maxDailyBudgetBps",
-  });
+  // === Rafraîchissement périodique
+  useEffect(() => {
+    const refresh = () => {
+      vaultDFT.refetch?.();
+      vaultStable.refetch?.();
+      emaShort.refetch?.();
+      emaLong.refetch?.();
+      spentTodayStableEq.refetch?.();
+    };
+    refresh();
+    const interval = setInterval(refresh, 10_000);
+    return () => clearInterval(interval);
+  }, [vaultDFT.refetch, vaultStable.refetch, emaShort.refetch, emaLong.refetch, spentTodayStableEq.refetch]);
 
-  const nextAllowedAt = useReadContract({
-    abi: VAULT_ABI,
-    address: VAULT_ADDRESS as `0x${string}`,
-    functionName: "nextAllowedAt",
-  });
+  // === Construction de l’historique (EMA / Spot)
+  useEffect(() => {
+    if (!emaShort?.data || !emaLong?.data) return;
 
-  const maxStressRatioBps = useReadContract({
-    abi: VAULT_ABI,
-    address: VAULT_ADDRESS as `0x${string}`,
-    functionName: "maxStressRatioBps",
-  });
+    const now = Math.floor(Date.now() / 1000);
+    const dftBal = Number(vaultDFT.data || 0n) / 1e18;
+    const stableBal = Number(vaultStable.data || 0n) / 1e18;
+    const spot = dftBal > 0 ? stableBal / dftBal : 0;
 
-  const quoteDyn = useReadContract({
-    abi: POOL_ABI,
-    address: POOL_ADDRESS as `0x${string}`,
-    functionName: "getQuoteWithDynamicFees",
-    args: [ethers.parseUnits("1", 18), true],
-  });
+    const newPoint = {
+      ts: now,
+      ema30: Number(emaShort.data) / 1e18,
+      ema120: Number(emaLong.data) / 1e18,
+      spot,
+    };
 
-  const vaultStableNum = to18(vaultStable.data as bigint | undefined);
-  const vaultDFTNum = to18(vaultDFT.data as bigint | undefined);
-  const vaultEquity = useMemo(
-    () => vaultStableNum + vaultDFTNum * priceSpot,
-    [vaultStableNum, vaultDFTNum, priceSpot]
-  );
+    setPriceSeries((prev) => {
+      const updated = [...prev, newPoint].filter((p) => now - p.ts <= 3600);
+      localStorage.setItem("vaultPriceSeries", JSON.stringify(updated));
+      return updated;
+    });
+  }, [emaShort.data, emaLong.data, vaultDFT.data, vaultStable.data]);
 
-  const stableSharePct = useMemo(
-    () => (vaultEquity > 0 ? (vaultStableNum / vaultEquity) * 100 : 0),
-    [vaultStableNum, vaultEquity]
-  );
+  // === Données calculées
+  const spentTodayNum = Number(spentTodayStableEq.data || 0n) / 1e18;
+  const dailyBudgetAbs = 10000; // valeur de référence si non exposée on-chain
+  const budgetPct = dailyBudgetAbs ? (100 * spentTodayNum) / dailyBudgetAbs : 0;
 
-  const spentTodayNum = to18(spentToday.data as bigint | undefined);
-  const dailyBudgetBps = Number(maxDailyBudgetBps.data || 0n);
-  const dailyBudgetAbs = useMemo(
-    () => (vaultEquity * dailyBudgetBps) / 10000,
-    [vaultEquity, dailyBudgetBps]
-  );
-
-  const budgetPct = useMemo(
-    () => (dailyBudgetAbs > 0 ? Math.min(100, (spentTodayNum / dailyBudgetAbs) * 100) : 0),
-    [spentTodayNum, dailyBudgetAbs]
-  );
-
-  const stressRatioBps = useMemo(() => {
-    if (!quoteDyn.data) return 0;
-    const tuple = quoteDyn.data as readonly [bigint, bigint, bigint, bigint];
-    return Number(tuple[3] || 0n);
-  }, [quoteDyn.data]);
-
-  const stressMax = Number(maxStressRatioBps.data || 0n);
-
-  const isCooldown = Number(nextAllowedAt.data || 0n) > nowSec();
-
-  const vaultStatus = useMemo(() => {
-    if (isCooldown) return { label: "⏸ Cooldown", color: "#f59e0b" };
-    if (stressRatioBps > stressMax) return { label: "⏸ Skip (Stress)", color: "#ef4444" };
-    if (dailyBudgetAbs > 0 && spentTodayNum >= dailyBudgetAbs)
-      return { label: "⏸ Budget atteint", color: "#ef4444" };
-    return { label: "✅ Active", color: "#10b981" };
-  }, [isCooldown, stressRatioBps, stressMax, dailyBudgetAbs, spentTodayNum]);
+  const stableSharePct =
+    (Number(vaultStable.data || 0n) /
+      ((Number(vaultStable.data || 0n) + Number(vaultDFT.data || 1n)) || 1)) *
+    100;
 
   return {
     vaultDFT,
     vaultStable,
     emaShort,
     emaLong,
-    spentToday,
-    vaultEquity,
-    stableSharePct,
+    spentToday: spentTodayStableEq,
+    priceSeries,
     budgetPct,
     spentTodayNum,
     dailyBudgetAbs,
-    stressRatioBps,
-    stressMax,
-    isCooldown,
-    vaultStatus,
-    nextAllowedAt,
+    stableSharePct: isNaN(stableSharePct) ? 0 : stableSharePct,
   };
 }
-

@@ -1,82 +1,125 @@
-import { ethers } from "ethers";
+// src/components/UserPanel.tsx
 import { useState } from "react";
+import { ethers } from "ethers";
 import { useWriteContract } from "wagmi";
-import {
-  STABLE_ABI,
-  VAULT_ABI,
-  STABLE_ADDRESS,
-  VAULT_ADDRESS,
-} from "../contracts";
 import { fmt } from "../utils/format";
+import { DFT_ABI, DFT_ADDRESS } from "../contracts";
+import { ethereumSepolia } from "../main";
 
 interface UserPanelProps {
   userDFT: { data?: bigint } | undefined;
   userStable: { data?: bigint } | undefined;
+  buyAmount: string;
+  setBuyAmount: (v: string) => void;
+  sellAmount: string;
+  setSellAmount: (v: string) => void;
+  onBuy: () => Promise<void>;
+  onSell: () => Promise<void>;
 }
 
-export default function UserPanel({ userDFT, userStable }: UserPanelProps) {
-  const [buyAmount, setBuyAmount] = useState("0");
-  const [sellAmount, setSellAmount] = useState("0");
+export default function UserPanel({
+  userDFT,
+  userStable,
+  buyAmount,
+  setBuyAmount,
+  sellAmount,
+  setSellAmount,
+  onBuy,
+  onSell,
+}: UserPanelProps) {
+  const { writeContractAsync } = useWriteContract();
 
-  const { writeContract: approveStableWrite } = useWriteContract();
-  const { writeContract: buyDFTWrite } = useWriteContract();
-  const { writeContract: sellDFTWrite } = useWriteContract();
+  // Champs d’envoi de DFT
+  const [sendTo, setSendTo] = useState("");
+  const [sendAmount, setSendAmount] = useState("");
+  const [sending, setSending] = useState(false);
 
-  const onApprove = async () => {
-    if (!buyAmount || Number(buyAmount) <= 0) return;
-    await approveStableWrite({
-      abi: STABLE_ABI,
-      address: STABLE_ADDRESS as `0x${string}`,
-      functionName: "approve",
-      args: [VAULT_ADDRESS, ethers.parseUnits(buyAmount, 18)],
-    });
-  };
+  const onSend = async () => {
+    if (!sendTo || !sendAmount || Number(sendAmount) <= 0) {
+      alert("Veuillez renseigner une adresse et un montant valide.");
+      return;
+    }
 
-  const onBuy = async () => {
-    if (!buyAmount || Number(buyAmount) <= 0) return;
-    await buyDFTWrite({
-      abi: VAULT_ABI,
-      address: VAULT_ADDRESS as `0x${string}`,
-      functionName: "buyDFT",
-      args: [ethers.parseUnits(buyAmount, 18)],
-    });
-  };
-
-  const onSell = async () => {
-    if (!sellAmount || Number(sellAmount) <= 0) return;
-    await sellDFTWrite({
-      abi: VAULT_ABI,
-      address: VAULT_ADDRESS as `0x${string}`,
-      functionName: "sellDFT",
-      args: [ethers.parseUnits(sellAmount, 18)],
-    });
+    try {
+      setSending(true);
+      await writeContractAsync({
+        chainId: ethereumSepolia.id,
+        abi: DFT_ABI,
+        address: DFT_ADDRESS as `0x${string}`,
+        functionName: "transfer",
+        args: [sendTo, ethers.parseUnits(sendAmount, 18)],
+      });
+      alert(`✅ ${sendAmount} DFT envoyés à ${sendTo}`);
+      setSendAmount("");
+      setSendTo("");
+    } catch (err: any) {
+      console.warn("❌ Erreur lors du transfert:", err);
+      alert("❌ Échec de la transaction (voir console).");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
     <div className="section-card">
-      <h2>👤 User</h2>
-      <p>Your DFT: {userDFT?.data ? fmt(userDFT.data as bigint) : "..."}</p>
-      <p>Your Stable: {userStable?.data ? fmt(userStable.data as bigint) : "..."}</p>
+      <h2>👤 Utilisateur</h2>
+      <p>
+        💠 DFT :{" "}
+        {userDFT?.data !== undefined ? fmt(userDFT.data as bigint) : "..."}
+      </p>
+      <p>
+        💵 Stable :{" "}
+        {userStable?.data !== undefined ? fmt(userStable.data as bigint) : "..."}
+      </p>
 
-      <h3>Buy DFT</h3>
-      <input
-        type="number"
-        value={buyAmount}
-        onChange={(e) => setBuyAmount(e.target.value)}
-        placeholder="Amount stable"
-      />
-      <button onClick={onApprove}>Approve</button>
-      <button onClick={onBuy}>Buy</button>
+      {/* Acheter */}
+      <div style={{ marginTop: 20 }}>
+        <h3>🛒 Acheter du DFT</h3>
+        <input
+          type="number"
+          min="0"
+          value={buyAmount}
+          onChange={(e) => setBuyAmount(e.target.value)}
+          placeholder="Montant en STABLE"
+        />
+        <button onClick={onBuy}>Buy</button>
+      </div>
 
-      <h3>Sell DFT</h3>
-      <input
-        type="number"
-        value={sellAmount}
-        onChange={(e) => setSellAmount(e.target.value)}
-        placeholder="Amount DFT"
-      />
-      <button onClick={onSell}>Sell</button>
+      {/* Vendre */}
+      <div style={{ marginTop: 20 }}>
+        <h3>💰 Vendre du DFT</h3>
+        <input
+          type="number"
+          min="0"
+          value={sellAmount}
+          onChange={(e) => setSellAmount(e.target.value)}
+          placeholder="Montant en DFT"
+        />
+        <button onClick={onSell}>Sell</button>
+      </div>
+
+      {/* Envoyer */}
+      <div style={{ marginTop: 20 }}>
+        <h3>📤 Envoyer des DFT</h3>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <input
+            type="text"
+            placeholder="Adresse du destinataire (0x...)"
+            value={sendTo}
+            onChange={(e) => setSendTo(e.target.value)}
+          />
+          <input
+            type="number"
+            min="0"
+            placeholder="Montant DFT"
+            value={sendAmount}
+            onChange={(e) => setSendAmount(e.target.value)}
+          />
+          <button onClick={onSend} disabled={sending}>
+            {sending ? "⏳ Envoi..." : "📤 Envoyer"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
-

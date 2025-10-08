@@ -9,11 +9,10 @@ import {
 } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { defineChain } from "viem";
-
-// ✅ Connectors (MetaMask + Rabby)
+import { mainnet } from "viem/chains"; // ✅ correction ici
 import { injected, metaMask } from "wagmi/connectors";
 
-// ⚡ Définition réseau Sepolia (custom pour éviter fallback Mainnet)
+// ⚡ Définition du réseau Sepolia
 export const ethereumSepolia = defineChain({
   id: 11155111,
   name: "Ethereum Sepolia",
@@ -31,20 +30,23 @@ export const ethereumSepolia = defineChain({
   },
 });
 
-// ⚡ Configuration Wagmi → UNIQUEMENT Sepolia
+// ⚙️ Configuration Wagmi
 export const config = createConfig({
-  chains: [ethereumSepolia],
+  chains: [ethereumSepolia, mainnet],
   connectors: [
-    injected({ target: "metaMask" }), // support MetaMask & Rabby
+    injected({ shimDisconnect: true }),
     metaMask(),
   ],
   transports: {
     [ethereumSepolia.id]: http("https://eth-sepolia.g.alchemy.com/v2/1jt9Pp7HN7-YT_v4CpqmF"),
+    [mainnet.id]: http("https://eth.llamarpc.com"), // fallback minimal
   },
   ssr: true,
+  multiInjectedProviderDiscovery: true,
+  syncConnectedChain: true,
 });
 
-// ⚡ Query Client React-Query
+// ⚡ Query Client React Query
 const queryClient = new QueryClient();
 
 // ⚡ Point d’entrée
